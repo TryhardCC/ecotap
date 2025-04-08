@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'dart:math';
 import '../models/game_state.dart';
 
 class GameScreen extends StatefulWidget {
@@ -12,6 +14,41 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final Random _random = Random();
+
+  String _getResourceSymbol(String resourceType) {
+    switch (resourceType.toLowerCase()) {
+      case 'nature':
+        return '🌿';
+      case 'favor':
+        return '❤️';
+      case 'human population':
+        return '👤';
+      case 'money':
+        return '💵';
+      default:
+        return '';
+    }
+  }
+
+  String _getResourceDisplay(String resourceType, {bool showLabel = false}) {
+    final symbol = _getResourceSymbol(resourceType);
+    return showLabel ? '$symbol $resourceType' : symbol;
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _playRandomNote() async {
+    // Notes from C4 to B4 (7 notes)
+    final note = _random.nextInt(7);
+    await _audioPlayer.play(AssetSource('sounds/note$note.mp3'));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,7 +70,10 @@ class _GameScreenState extends State<GameScreen> {
               Expanded(
                 child: _buildMainArea(),
               ),
-              _buildUpgradesList(),
+              Expanded(
+                flex: 2,
+                child: _buildUpgradesList(),
+              ),
             ],
           ),
         ),
@@ -50,44 +90,58 @@ class _GameScreenState extends State<GameScreen> {
             color: Colors.white.withOpacity(0.9),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Text(
+                _formatDate(gameState.currentDate),
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                gameState.levelTitle,
+                style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green.shade900,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Resources',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  _buildResourceColumn(
+                    'Human Population',
+                    gameState.humanPopulation.toStringAsFixed(0),
+                    '${gameState.naturePerSecond.toStringAsFixed(1)}/s',
+                    Colors.blue,
                   ),
-                  Text(
-                    '${gameState.resources.toStringAsFixed(1)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  _buildResourceColumn(
+                    'Nature',
+                    gameState.nature.toStringAsFixed(1),
+                    '${gameState.naturePerSecond.toStringAsFixed(1)}/s',
+                    Colors.green,
                   ),
                 ],
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Per Second',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  _buildResourceColumn(
+                    'Money',
+                    gameState.money.toStringAsFixed(1),
+                    '${gameState.moneyPerSecond.toStringAsFixed(1)}/s',
+                    Colors.amber,
                   ),
-                  Text(
-                    '${gameState.resourcesPerSecond.toStringAsFixed(1)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  _buildResourceColumn(
+                    'Favor',
+                    gameState.favor.toStringAsFixed(1),
+                    '${gameState.favorPerSecond.toStringAsFixed(1)}/s',
+                    Colors.purple,
                   ),
                 ],
               ),
@@ -98,11 +152,46 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildResourceColumn(String label, String value, String rate, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _getResourceDisplay(label, showLabel: true),
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: color,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          rate,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildMainArea() {
     return GestureDetector(
-      onTapDown: (_) {
+      onTapDown: (_) async {
         final gameState = Provider.of<GameState>(context, listen: false);
         gameState.tap();
+        await _playRandomNote();
       },
       child: Center(
         child: Column(
@@ -135,8 +224,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget _buildUpgradesList() {
     return Container(
-      height: 200,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.9),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
@@ -157,7 +245,9 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget _buildUpgradeCard(Upgrade upgrade, GameState gameState) {
-    final canAfford = gameState.resources >= upgrade.currentCost;
+    final canAfford = upgrade.baseNatureCost > 0 
+        ? gameState.nature >= upgrade.currentNatureCost
+        : gameState.money >= upgrade.currentCost;
     
     return Container(
       width: 200,
@@ -171,6 +261,7 @@ class _GameScreenState extends State<GameScreen> {
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -187,6 +278,8 @@ class _GameScreenState extends State<GameScreen> {
               fontSize: 14,
               color: Colors.grey.shade700,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
           const Spacer(),
           Row(
@@ -199,12 +292,26 @@ class _GameScreenState extends State<GameScreen> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              Text(
-                'Cost: ${upgrade.currentCost.toStringAsFixed(0)}',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (upgrade.baseCost > 0)
+                    Text(
+                      'Cost: ${upgrade.currentCost.toStringAsFixed(0)} ${_getResourceSymbol('money')}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  if (upgrade.baseNatureCost > 0)
+                    Text(
+                      'Cost: ${upgrade.currentNatureCost.toStringAsFixed(0)} ${_getResourceSymbol('nature')}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
@@ -219,6 +326,7 @@ class _GameScreenState extends State<GameScreen> {
                 backgroundColor: Colors.green.shade600,
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: Colors.grey.shade400,
+                padding: const EdgeInsets.symmetric(vertical: 8),
               ),
               child: Text(
                 'Upgrade',
