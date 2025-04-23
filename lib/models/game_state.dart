@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'dart:math';
+import 'upgrade.dart';
 
 class GameState extends ChangeNotifier {
   // Resources
@@ -19,6 +21,9 @@ class GameState extends ChangeNotifier {
 
   List<Upgrade> _upgrades = [];
   int _cityLevel = 1;
+  bool _isGameOver = false;
+  String _previousLevelTitle = 'Activist';
+  String _gameOverReason = '';
 
   // Getters
   double get humanPopulation => _humanPopulation;
@@ -31,6 +36,8 @@ class GameState extends ChangeNotifier {
   List<Upgrade> get upgrades => _upgrades;
   int get cityLevel => _cityLevel;
   DateTime get currentDate => _currentDate;
+  bool get isGameOver => _isGameOver;
+  String get gameOverReason => _gameOverReason;
 
   String get levelTitle {
     if (_favor >= 2000) return 'World Leader';
@@ -88,19 +95,34 @@ class GameState extends ChangeNotifier {
     ];
   }
 
+  void _checkLevelUp() {
+    final currentTitle = levelTitle;
+    if (currentTitle != _previousLevelTitle) {
+      _previousLevelTitle = currentTitle;
+    }
+  }
+
   void tap() {
     _money += 1;
+    _nature += 1;
     notifyListeners();
+  }
+
+  void burn() {
+    if (_nature >= 5) {
+      _nature -= 5;
+      _money += 10;
+      _humanPopulation = max(0, _humanPopulation - 30000000);
+      notifyListeners();
+    }
   }
 
   void purchaseUpgrade(Upgrade upgrade) {
     if (upgrade.baseNatureCost > 0) {
-      if (_nature >= upgrade.currentNatureCost) {
-        _nature -= upgrade.currentNatureCost;
-        upgrade.level++;
-        _recalculateResourcesPerSecond();
-        notifyListeners();
-      }
+      _nature -= upgrade.currentNatureCost;
+      upgrade.level++;
+      _recalculateResourcesPerSecond();
+      notifyListeners();
     } else if (_money >= upgrade.currentCost) {
       _money -= upgrade.currentCost;
       upgrade.level++;
@@ -120,6 +142,8 @@ class GameState extends ChangeNotifier {
 
   void _startResourceGeneration() {
     Future.delayed(const Duration(seconds: 1), () {
+      if (_isGameOver) return;
+      
       // Update date (1 second = 1 day)
       _currentDate = _currentDate.add(const Duration(days: 1));
       
@@ -132,38 +156,34 @@ class GameState extends ChangeNotifier {
       _money += _moneyPerSecond;
       _favor += _favorPerSecond;
       
+      // Check for level up
+      _checkLevelUp();
+      
+      // Check for game over conditions
+      if (_nature <= -100 || _humanPopulation < 1000000000) {
+        _isGameOver = true;
+        _gameOverReason = _humanPopulation < 1000000000 ? 'Human population has fallen below 1 billion!' : 'Nature has been depleted!';
+      }
+      
       notifyListeners();
       _startResourceGeneration();
     });
   }
-}
 
-class Upgrade {
-  final String id;
-  final String name;
-  final String description;
-  final double baseCost;
-  final double baseNatureCost;
-  final double baseNatureProduction;
-  final double baseMoneyProduction;
-  final double baseFavorProduction;
-  int level;
-
-  Upgrade({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.baseCost,
-    this.baseNatureCost = 0,
-    required this.baseNatureProduction,
-    required this.baseMoneyProduction,
-    this.baseFavorProduction = 0,
-    this.level = 0,
-  });
-
-  double get currentCost => baseCost * (1.15 * (level + 1));
-  double get currentNatureCost => baseNatureCost * (1.15 * (level + 1));
-  double get currentNatureProduction => baseNatureProduction * level;
-  double get currentMoneyProduction => baseMoneyProduction * level;
-  double get currentFavorProduction => baseFavorProduction * level;
+  void restartGame() {
+    _humanPopulation = 8319183028;
+    _nature = 0;
+    _money = 0;
+    _favor = 0;
+    _naturePerSecond = 0;
+    _moneyPerSecond = 0;
+    _favorPerSecond = 0;
+    _currentDate = DateTime(2026, 1, 1);
+    _cityLevel = 1;
+    _isGameOver = false;
+    _previousLevelTitle = 'Activist';
+    _initializeUpgrades();
+    _startResourceGeneration();
+    notifyListeners();
+  }
 } 
